@@ -48,11 +48,17 @@ jobs:
           toolchain: stable
           target: ${{ matrix.TARGET }}
           profile: minimal
+      - name: Check Docker
+        run: |
+          docker info
+          echo "Docker is running"
 
       - name: Install cross
         if: startsWith(matrix.OS, 'ubuntu')
         run: |
           cargo install cross
+          echo "Installed cross version:"
+          cross --version
 
       - name: Build with cross
         if: startsWith(matrix.OS, 'ubuntu')
