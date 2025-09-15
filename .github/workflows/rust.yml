@@ -183,6 +183,7 @@ jobs:
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]
           EOF
       - name: Install rust target
+        if: ${{ ! endsWith(matrix.TARGET, 'freebsd') &&  ! startsWith(matrix.TARGET, 'mips') }}
         run: rustup target add $TARGET
       - name: Run build
         run: cargo build --release --verbose --target $TARGET --features $FEATURES
