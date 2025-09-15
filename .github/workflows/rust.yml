@@ -124,11 +124,7 @@ jobs:
                 MUSL_URI=mips-linux-muslsf-cross
                 ;;
             esac
-            if [[ $TARGET =~ ^mips.*$ ]]; then
-              # mips平台使用1.71.1版本
-              rustup install 1.71.1
-              rustup default 1.71.1  
-            fi
+
             if [  -n "$MUSL_URI" ]; then
               mkdir -p ./musl_gcc 
               wget -c https://github.com/rustp2p/musl-cross/releases/download/0.0.1/$MUSL_URI.tgz -P /opt/musl_gcc/
