@@ -73,7 +73,7 @@ jobs:
             OS: ubuntu-latest
             FEATURES: default
     # needs: test
-    runs-on: ${{ matrix.OS }}
+    runs-on: windows-latest
     env:
       NAME: szvbs # change with the name of your project
       TARGET: ${{ matrix.TARGET }}
@@ -99,7 +99,7 @@ jobs:
           # dependencies are only needed on ubuntu as that's the only place where
           # we make cross-compilation
           if [[ $OS =~ ^ubuntu.*$ ]]; then
-            sudo apt-get update && sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf musl-tools
+            sudo apt-get update && sudo apt-get install clang llvm libc6-dev-i386 crossbuild-essential-arm64 crossbuild-essential-armhf musl-tools libboost-all-dev libc6-dev -y
             #  curl -s musl.cc | grep mipsel
             case $TARGET in 
               mipsel-unknown-linux-musl)
@@ -111,22 +111,23 @@ jobs:
                 ;;
               armv7-unknown-linux-musleabihf)
                 MUSL_URI=armv7l-linux-musleabihf-cross
-                ;;   
+                ;;    
               armv7-unknown-linux-musleabi)
                 MUSL_URI=armv7m-linux-musleabi-cross
-                ;;   
+                ;; 
               arm-unknown-linux-musleabihf)
                 MUSL_URI=arm-linux-musleabihf-cross
                 ;;    
               arm-unknown-linux-musleabi)
                 MUSL_URI=arm-linux-musleabi-cross
-                ;;     
+                ;;        
               mips-unknown-linux-musl)
                 MUSL_URI=mips-linux-muslsf-cross
                 URL=mips-linux-muslsf
                 ;;
             esac
-
+          
+          
             if [  -n "$MUSL_URI" ]; then
               mkdir -p ./musl_gcc 
               wget -c https://github.com/rustp2p/musl-cross/releases/download/0.0.1/$MUSL_URI.tgz -P /opt/musl_gcc/
@@ -134,7 +135,6 @@ jobs:
               sudo ln -s /opt/musl_gcc/$MUSL_URI/bin/*gcc /usr/bin/
             fi
           fi
-
           if [[ $TARGET =~ ^mips.*$ ]]; then
             cd /opt/musl_gcc/${URL}-cross/lib/gcc/${URL}/11.2.1
             cp libgcc_eh.a libunwind.a
