@@ -71,7 +71,7 @@ jobs:
             FEATURES: normal,web
           - TARGET: mips-unknown-linux-musl # openwrt
             OS: ubuntu-latest
-            FEATURES: normal
+            FEATURES: default
     # needs: test
     runs-on: ${{ matrix.OS }}
     env:
@@ -122,6 +122,7 @@ jobs:
                 ;;     
               mips-unknown-linux-musl)
                 MUSL_URI=mips-linux-muslsf-cross
+                URL=mips-linux-muslsf
                 ;;
             esac
 
@@ -165,7 +166,7 @@ jobs:
           linker = "mipsel-linux-musl-gcc"
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]
           [target.mips-unknown-linux-musl]
-          linker = "mips-linux-musl-gcc"
+          linker = "mips-linux-muslsf-gcc"
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]
           [target.x86_64-pc-windows-msvc]
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]    
