@@ -229,8 +229,14 @@ jobs:
           else
             TAG=$GITHUB_SHA
           fi
-          mv ./target/$TARGET/release/$EXEC ./$EXEC
-          tar -czf ./artifacts/$NAME-$TARGET-$TAG.tar.gz $EXEC static
+          mv ./target/$TARGET/release/$EXEC_VNT_CLI ./artifacts/$EXEC_VNT_CLI
+          mv ./target/$TARGET/release/$EXEC_VN_LINK_CLI ./artifacts/$EXEC_VN_LINK_CLI
+          mv ./README ./artifacts/README.txt
+          cd ./artifacts
+          tar -czf vnt-$TARGET-$TAG.tar.gz *
+          mkdir upload_file
+          mv vnt-$TARGET-$TAG.tar.gz ./upload_file/
+          
       - name: Archive artifact
         uses: actions/upload-artifact@v4
         with:
