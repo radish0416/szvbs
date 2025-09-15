@@ -73,6 +73,11 @@ jobs:
 
       - name: Compress
         run: |
+          # 调试输出路径
+          echo "Current dir: $(pwd)"
+          ls -R ./target
+          ls -R ./target/cross
+          
           mkdir -p ./artifacts
           if [[ $TARGET == *linux* ]]; then
             EXEC=$NAME
@@ -90,9 +95,12 @@ jobs:
 
           # 根据平台调整输出路径
           if [[ $TARGET == *linux* ]]; then
-            mv ./target/cross/$TARGET/release/$EXEC ./$EXEC
+            # 确保路径正确
+            OUTPUT_PATH="./target/cross/$TARGET/release/"
+            echo "Copying from: $OUTPUT_PATH$EXEC"
+            cp $OUTPUT_PATH$EXEC ./$EXEC
           else
-            mv ./target/$TARGET/release/$EXEC ./$EXEC
+            cp ./target/$TARGET/release/$EXEC ./$EXEC
           fi
 
           tar -czf ./artifacts/$NAME-$TARGET-$TAG.tar.gz $EXEC
