@@ -80,10 +80,10 @@ jobs:
       OS: ${{ matrix.OS }}
       FEATURES: ${{ matrix.FEATURES }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Install latest Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Init submodules
+        uses: snickerbockers/submodules-init@v4
         
       - name: Cargo cache
         uses: actions/cache@v4
@@ -121,7 +121,7 @@ jobs:
                 MUSL_URI=arm-linux-musleabi-cross
                 ;;     
               mips-unknown-linux-musl)
-                MUSL_URI=mipsel-linux-muslsf-cross
+                MUSL_URI=mips-linux-muslsf-cross
                 ;;
             esac
             if [[ $TARGET =~ ^mips.*$ ]]; then
