@@ -198,7 +198,15 @@ jobs:
         if: ${{ ! endsWith(matrix.TARGET, 'freebsd') &&  ! startsWith(matrix.TARGET, 'mips') }}
         run: rustup target add $TARGET
       - name: Run build
-        run: cargo build --release --verbose --target $TARGET --features $FEATURES
+        if: ${{ ! endsWith(matrix.TARGET, 'freebsd') }}
+        run: |
+          if [[ $TARGET =~ ^mips.*$ ]]; then
+            cargo +nightly build --release --verbose --target $TARGET -Z build-std=std,panic_abort --features $FEATURES
+          else
+            cargo build --release --verbose --target $TARGET --features $FEATURES
+          fi
+          ldd ./target/$TARGET/release/net_link || true
+          file ./target/$TARGET/release/net_link || true
       - name: List target
         run: find ./target
       - name: Compress
