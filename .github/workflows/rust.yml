@@ -73,7 +73,7 @@ jobs:
             OS: ubuntu-latest
             FEATURES: default
     # needs: test
-    runs-on: windows-latest
+    runs-on: ${{ matrix.OS }}
     env:
       NAME: szvbs # change with the name of your project
       TARGET: ${{ matrix.TARGET }}
