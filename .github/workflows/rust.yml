@@ -68,7 +68,7 @@ jobs:
             FEATURES: ring-cipher,web
           - TARGET: mipsel-unknown-linux-musl # openwrt
             OS: ubuntu-latest
-            FEATURES: normal,web
+            FEATURES: default
           - TARGET: mips-unknown-linux-musl # openwrt
             OS: ubuntu-latest
             FEATURES: default
@@ -104,6 +104,7 @@ jobs:
             case $TARGET in 
               mipsel-unknown-linux-musl)
                 MUSL_URI=mipsel-linux-muslsf-cross
+                URL=mipsel-linux-muslsf
                 ;;
               aarch64-unknown-linux-musl)
                 MUSL_URI=aarch64-linux-musl-cross
@@ -163,7 +164,7 @@ jobs:
           linker = "arm-linux-musleabi-gcc"
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]
           [target.mipsel-unknown-linux-musl]
-          linker = "mipsel-linux-musl-gcc"
+          linker = "mipsel-linux-muslsf-gcc"
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]
           [target.mips-unknown-linux-musl]
           linker = "mips-linux-muslsf-gcc"
