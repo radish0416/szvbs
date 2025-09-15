@@ -183,7 +183,10 @@ jobs:
           "-L", "/opt/musl_gcc/mipsel-linux-muslsf-cross/lib/gcc/mipsel-linux-muslsf/11.2.1"]
           [target.mips-unknown-linux-musl]
           linker = "mips-linux-muslsf-gcc"
-          rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]
+          rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols","-C", "link-arg=-static",
+          "-C", "relocation-model=static","-C", "link-arg=-no-pie","--cfg", "compiler_builtins_no_debug",
+          "-L", "/opt/musl_gcc/mips-linux-muslsf-cross/mips-linux-muslsf/lib",
+          "-L", "/opt/musl_gcc/mips-linux-muslsf-cross/lib/gcc/mips-linux-muslsf/11.2.1"]
           [target.x86_64-pc-windows-msvc]
           rustflags = ["-C", "target-feature=+crt-static","-C", "strip=symbols"]    
           [target.i686-pc-windows-msvc]
