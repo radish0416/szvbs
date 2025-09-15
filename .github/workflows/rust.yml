@@ -117,7 +117,7 @@ jobs:
                 MUSL_URI=arm-linux-musleabi-cross
                 ;;     
               mips-unknown-linux-musl)
-                MUSL_URI=mips-linux-musl-cross
+                MUSL_URI=mipsel-linux-muslsf-cross
                 ;;
             esac
             if [[ $TARGET =~ ^mips.*$ ]]; then
