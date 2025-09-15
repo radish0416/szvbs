@@ -81,9 +81,9 @@ jobs:
       FEATURES: ${{ matrix.FEATURES }}
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Init submodules
-        uses: snickerbockers/submodules-init@v4
+        run: git submodule update --init --recursive --remote && git submodule status
         
       - name: Cargo cache
         uses: actions/cache@v4
