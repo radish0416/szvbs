@@ -13,6 +13,7 @@ use crate::protocol::NetPacket;
 use crate::ConfigInfo;
 
 pub mod client;
+pub mod byte_rate_limiter;
 pub mod server;
 
 #[derive(Clone)]

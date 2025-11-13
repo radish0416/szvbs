@@ -7,8 +7,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::{channel, Sender};
+use std::time::Duration;
+use tokio::time::timeout;
 
 const TCP_MAX_PACKET_SIZE: usize = (1 << 24) - 1;
+// 设置读取超时时间为60秒
+const TCP_READ_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub async fn start(tcp: TcpListener, handler: PacketHandler) {
     if let Err(e) = accept(tcp, handler).await {
@@ -27,8 +31,10 @@ async fn accept(tcp: TcpListener, handler: PacketHandler) -> io::Result<()> {
 async fn stream_handle(stream: TcpStream, addr: SocketAddr, handler: PacketHandler) {
     {
         let mut buf = [0u8; 1];
-        match stream.peek(&mut buf).await {
-            Ok(len) => {
+        // 添加 peek 的超时处理
+        let peek_result = timeout(TCP_READ_TIMEOUT, stream.peek(&mut buf)).await;
+        match peek_result {
+            Ok(Ok(len)) => {
                 if len == 0 {
                     log::warn!("数据流读取失败 {}", addr);
                     return;
@@ -42,11 +48,35 @@ async fn stream_handle(stream: TcpStream, addr: SocketAddr, handler: PacketHandl
                     return;
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 log::warn!("数据流读取失败 {:?} {}", e, addr);
                 return;
             }
+            Err(_) => {
+                log::warn!("peek 读取超时 来源地址 {}", addr);
+                return;
+            }
         }
+        // match stream.peek(&mut buf).await {
+        //     Ok(len) => {
+        //         if len == 0 {
+        //             log::warn!("数据流读取失败 {}", addr);
+        //             return;
+        //         }
+        //         if buf[0] != 0 {
+        //             //可能是ws协议
+        //             crate::core::server::websocket::handle_websocket_connection(
+        //                 stream, addr, handler,
+        //             )
+        //             .await;
+        //             return;
+        //         }
+        //     }
+        //     Err(e) => {
+        //         log::warn!("数据流读取失败 {:?} {}", e, addr);
+        //         return;
+        //     }
+        // }
     }
 
     let (r, mut w) = stream.into_split();
@@ -98,7 +128,23 @@ async fn tcp_read(
     let sender = Some(sender);
 
     loop {
-        read.read_exact(&mut head).await?;
+        // 添加读取头部的超时处理
+        let read_head_result = timeout(TCP_READ_TIMEOUT, read.read_exact(&mut head)).await;
+        match read_head_result {
+            Ok(Ok(_)) => {
+                // 读取成功
+            }
+            Ok(Err(e)) => {
+                // 读取出错
+                return Err(e);
+            }
+            Err(_) => {
+                // 超时
+                log::warn!("tcp读取头部超时 来源地址 {}", addr);
+                return Ok(());
+            }
+        }
+        // read.read_exact(&mut head).await?;
         if head[0] != 0 {
             log::warn!("tcp数据流错误 来源地址 {}", addr);
             return Ok(());
@@ -110,7 +156,23 @@ async fn tcp_read(
                 "length overflow",
             ));
         }
-        read.read_exact(&mut buf[..len]).await?;
+        // 添加读取消息体的超时处理
+        let read_body_result = timeout(TCP_READ_TIMEOUT, read.read_exact(&mut buf[..len])).await;
+        match read_body_result {
+            Ok(Ok(_)) => {
+                // 读取成功
+            }
+            Ok(Err(e)) => {
+                // 读取出错
+                return Err(e);
+            }
+            Err(_) => {
+                // 超时
+                log::warn!("tcp读取消息体超时 来源地址 {}, 消息长度 {}", addr, len);
+                return Ok(());
+            }
+        }
+        // read.read_exact(&mut buf[..len]).await?;
         let packet = NetPacket::new0(len, &mut buf)?;
         if let Some(rs) = handler.handle(context, packet, addr, &sender).await {
             if sender
