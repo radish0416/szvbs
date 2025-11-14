@@ -67,9 +67,6 @@ pub struct StartArgs {
     /// wg私钥，使用base64编码
     #[arg(long = "wg")]
     wg_secret_key: Option<String>,
-    /// IPturn 限流，每秒最大字节数，0表示无限制
-    #[arg(long, default_value_t = 0u64)]
-    ipturn_rate_limit_bytes: u64,
 }
 
 #[derive(Clone)]
@@ -86,7 +83,6 @@ pub struct ConfigInfo {
     pub password: String,
     pub wg_secret_key: StaticSecret,
     pub wg_public_key: PublicKey,
-    pub ipturn_rate_limit_bytes: u64,
 }
 impl Debug for ConfigInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -97,7 +93,6 @@ impl Debug for ConfigInfo {
             .field("broadcast", &self.broadcast)
             .field("netmask", &self.netmask)
             .field("check_finger", &self.check_finger)
-            .field("ipturn_rate_limit_bytes", &self.ipturn_rate_limit_bytes)
             .field(
                 "wg_secret_key",
                 &general_purpose::STANDARD.encode(&self.wg_secret_key),
@@ -299,7 +294,6 @@ async fn main() {
         password: args.password.unwrap_or_else(|| "admin".into()),
         wg_secret_key,
         wg_public_key,
-        ipturn_rate_limit_bytes: args.ipturn_rate_limit_bytes,
     };
     let rsa = match RsaCipher::new(root_path) {
         Ok(rsa) => {
@@ -312,7 +306,6 @@ async fn main() {
         }
     };
     log::info!("config:{:?}", config);
-    log::info!("Ipturn限流: {} bytes/sec", config.ipturn_rate_limit_bytes);
     let udp = create_udp(port, host.as_deref()).unwrap();
     log::info!("监听host:{:?},监听udp端口: {:?}",host, port);
     println!("监听host:{:?},监听udp端口: {:?}", host, port);
