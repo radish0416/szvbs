@@ -67,6 +67,9 @@ pub struct StartArgs {
     /// wg私钥，使用base64编码
     #[arg(long = "wg")]
     wg_secret_key: Option<String>,
+    /// Rate limit in bytes per second for IpTurn traffic, 0 or omitted means no limit
+    #[arg(long)]
+    rate_limit: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -83,6 +86,7 @@ pub struct ConfigInfo {
     pub password: String,
     pub wg_secret_key: StaticSecret,
     pub wg_public_key: PublicKey,
+    pub rate_limit: Option<u64>,
 }
 impl Debug for ConfigInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -294,6 +298,7 @@ async fn main() {
         password: args.password.unwrap_or_else(|| "admin".into()),
         wg_secret_key,
         wg_public_key,
+        rate_limit: args.rate_limit,
     };
     let rsa = match RsaCipher::new(root_path) {
         Ok(rsa) => {

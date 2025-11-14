@@ -2,14 +2,17 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::cipher::RsaCipher;
 use crate::core::store::cache::{AppCache, LinkVntContext, VntContext};
 use crate::error::*;
-use crate::protocol::NetPacket;
+use crate::protocol::{NetPacket, Protocol};
 use crate::ConfigInfo;
+use super::rate_limiter::ConcurrentByteRateLimiter;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc::Sender;
+use tokio::time::sleep;
 
 #[derive(Clone)]
 pub struct ClientPacketHandler {
@@ -17,6 +20,8 @@ pub struct ClientPacketHandler {
     config: ConfigInfo,
     rsa_cipher: Option<RsaCipher>,
     udp: Arc<UdpSocket>,
+    blocked: bool,
+    limiter: Option<Arc<ConcurrentByteRateLimiter>>,
 }
 
 impl ClientPacketHandler {
@@ -26,11 +31,23 @@ impl ClientPacketHandler {
         rsa_cipher: Option<RsaCipher>,
         udp: Arc<UdpSocket>,
     ) -> Self {
+        let (blocked, limiter) = match config.rate_limit {
+            None => (false, None),
+            Some(rate) => {
+                if rate == 0 {
+                    (true, None)
+                } else {
+                    (false, Some(Arc::new(ConcurrentByteRateLimiter::new(rate, rate as f64))))
+                }
+            }
+        };
         Self {
             cache,
             config,
             rsa_cipher,
             udp,
+            blocked,
+            limiter,
         }
     }
 }
@@ -63,9 +80,21 @@ impl ClientPacketHandler {
                 finger.check_finger(&net_packet)?;
             }
             let destination = net_packet.destination();
+            let is_ip_turn = net_packet.protocol() == Protocol::IpTurn;
+            if is_ip_turn {
+                if self.blocked {
+                    return Ok(());
+                }
+                if let Some(ref limiter) = self.limiter {
+                    let size = net_packet.data_len() as u64;
+                    while !limiter.try_acquire_bytes(size) {
+                        sleep(Duration::from_millis(1)).await;
+                    }
+                }
+            }
             if destination.is_broadcast() || self.config.broadcast == destination {
                 //处理广播
-                broadcast(context, &self.udp, net_packet).await;
+                broadcast(context, &self.udp, net_packet, &self.blocked, &self.limiter).await;
             } else {
                 let is_encrypt = net_packet.is_encrypt();
                 let source_ip = u32::from(net_packet.source());
@@ -94,9 +123,15 @@ async fn broadcast<B: AsRef<[u8]>>(
     context: &LinkVntContext,
     udp_socket: &UdpSocket,
     net_packet: NetPacket<B>,
+    blocked: &bool,
+    limiter: &Option<Arc<ConcurrentByteRateLimiter>>,
 ) {
+    if *blocked || net_packet.protocol() != Protocol::IpTurn {
+        return;
+    }
     let is_encrypt = net_packet.is_encrypt();
     let source_ip = u32::from(net_packet.source());
+    let size = net_packet.data_len() as u64;
     let x: Vec<_> = context
         .network_info
         .read()
@@ -111,6 +146,11 @@ async fn broadcast<B: AsRef<[u8]>>(
         .map(|v| (v.address, v.tcp_sender.clone()))
         .collect();
     for (peer_addr, peer_tcp_sender) in x {
+        if let Some(ref l) = limiter {
+            while !l.try_acquire_bytes(size) {
+                sleep(Duration::from_millis(1)).await;
+            }
+        }
         send_one(udp_socket, peer_addr, peer_tcp_sender, &net_packet).await;
     }
 }

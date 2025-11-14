@@ -14,6 +14,8 @@ use crate::ConfigInfo;
 
 pub mod client;
 pub mod server;
+pub mod rate_limiter;
+
 
 #[derive(Clone)]
 pub struct PacketHandler {
