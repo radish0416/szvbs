@@ -7,7 +7,7 @@ use protobuf::Message;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{io, result};
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc::Sender;
@@ -23,55 +23,16 @@ use crate::protocol::ip_turn_packet::BroadcastPacket;
 use crate::protocol::{control_packet, error_packet, service_packet, NetPacket, Protocol, MAX_TTL};
 use crate::{protocol, ConfigInfo};
 
-// 限流相关结构
-#[derive(Debug, Clone)]
-struct RateLimiter {
-    max_requests_per_second: u32,
-    window_start: Instant,
-    request_count: u32,
-}
-
-impl RateLimiter {
-    fn new(max_requests_per_second: u32) -> Self {
-        Self {
-            max_requests_per_second,
-            window_start: Instant::now(),
-            request_count: 0,
-        }
-    }
-
-    fn check_and_update(&mut self) -> bool {
-        let now = Instant::now();
-        // 检查是否需要重置窗口
-        if now.duration_since(self.window_start) >= Duration::from_secs(1) {
-            self.window_start = now;
-            self.request_count = 0;
-        }
-        
-        // 检查是否超过限流阈值
-        if self.request_count >= self.max_requests_per_second {
-            false // 超过限流
-        } else {
-            self.request_count += 1;
-            true // 允许通过
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct ServerPacketHandler {
     cache: AppCache,
     config: ConfigInfo,
     rsa_cipher: Option<RsaCipher>,
     udp: Arc<UdpSocket>,
-    // 为每个IP地址维护一个限流器
-    rate_limiters: Arc<dashmap::DashMap<SocketAddr, RateLimiter>>,
-    // 全局限流配置
-    max_requests_per_second: u32,
 }
 
 impl ServerPacketHandler {
-   pub fn new(
+    pub fn new(
         cache: AppCache,
         config: ConfigInfo,
         rsa_cipher: Option<RsaCipher>,
@@ -82,15 +43,7 @@ impl ServerPacketHandler {
             config,
             rsa_cipher,
             udp,
-            rate_limiters: Arc::new(dashmap::DashMap::new()),
-            max_requests_per_second: 100, // 默认每秒最多100个请求
         }
-    }
-    
-    // 可以设置限流参数的方法
-    pub fn with_rate_limit(mut self, max_requests_per_second: u32) -> Self {
-        self.max_requests_per_second = max_requests_per_second;
-        self
     }
 }
 
@@ -98,16 +51,6 @@ impl ServerPacketHandler {
     pub async fn leave(&self, context: VntContext) {
         context.leave(&self.cache).await;
     }
-
-    // 检查限流
-    fn check_rate_limit(&self, addr: SocketAddr) -> bool {
-        let mut limiter = self.rate_limiters
-            .entry(addr)
-            .or_insert_with(|| RateLimiter::new(self.max_requests_per_second));
-        limiter.check_and_update()
-    }
-
-
     pub async fn handle<B: AsRef<[u8]> + AsMut<[u8]>>(
         &self,
         context: &mut VntContext,
@@ -115,13 +58,6 @@ impl ServerPacketHandler {
         addr: SocketAddr,
         tcp_sender: &Option<Sender<Vec<u8>>>,
     ) -> Result<Option<NetPacket<Vec<u8>>>> {
-        // 检查限流
-        if !self.check_rate_limit(addr) {
-            log::warn!("Rate limit exceeded for address: {}", addr);
-            // 返回限流错误
-            let source = net_packet.source();
-            return Ok(Some(self.handle_err(addr, source, &Error::Other("Rate limit exceeded".to_string()))?));
-        }
         // 握手请求直接处理
         let source = net_packet.source();
         if net_packet.protocol() == Protocol::Service {
