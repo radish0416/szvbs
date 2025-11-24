@@ -6,8 +6,8 @@ use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, Debug)]
 pub struct WireGuardConfig {
-    pub vnts_endpoint: String,
-    pub vnts_allowed_ips: String,
+    pub iotnet_endpoint: String,
+    pub iotnet_allowed_ips: String,
     pub group_id: String,
     pub device_id: String,
     pub ip: Ipv4Addr,

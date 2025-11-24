@@ -134,8 +134,8 @@ impl VntsWebService {
         };
         let response = generate_ip(cache, register_client_request).await?;
         let wireguard_config = WireGuardConfig {
-            vnts_endpoint: wg_data.config.szvbs_endpoint.clone(),
-            vnts_allowed_ips: network.to_string(),
+            iotnet_endpoint: wg_data.config.iotnet_endpoint.clone(),
+            iotnet_allowed_ips: network.to_string(),
             group_id: group_id.clone(),
             device_id: device_id.clone(),
             ip: response.virtual_ip,
@@ -146,9 +146,9 @@ impl VntsWebService {
         };
         cache.wg_group_map.insert(public_key, wireguard_config);
         let config = WgConfig {
-            szvbs_endpoint: wg_data.config.szvbs_endpoint,
-            szvbs_public_key: general_purpose::STANDARD.encode(&self.config.wg_public_key),
-            szvbs_allowed_ips: network.to_string(),
+            iotnet_endpoint: wg_data.config.iotnet_endpoint,
+            iotnet_public_key: general_purpose::STANDARD.encode(&self.config.wg_public_key),
+            iotnet_allowed_ips: network.to_string(),
             public_key: general_purpose::STANDARD.encode(public_key),
             private_key: general_purpose::STANDARD.encode(secret_key),
             ip: response.virtual_ip,
@@ -165,7 +165,7 @@ impl VntsWebService {
         Ok(wg_data)
     }
     fn check_wg_config(config: &CreateWgConfig) -> anyhow::Result<([u8; 32], [u8; 32])> {
-        match config.szvbs_endpoint.to_socket_addrs() {
+        match config.iotnet_endpoint.to_socket_addrs() {
             Ok(mut addr) => {
                 if let Some(addr) = addr.next() {
                     if addr.ip().is_unspecified() || addr.port() == 0 {

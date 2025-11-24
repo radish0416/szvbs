@@ -12,7 +12,7 @@ pub struct CreateWGData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateWgConfig {
-    pub szvbs_endpoint: String,
+    pub iotnet_endpoint: String,
     pub private_key: String,
     pub persistent_keepalive: u16,
 }

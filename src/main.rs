@@ -10,6 +10,31 @@ use std::io;
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
+use serde::Deserialize;
+use toml;
+
+#[cfg(feature = "web")]
+#[derive(Deserialize, Clone, Debug)]
+struct WebConfig {
+    web_port: Option<u16>,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct ConfigFile {
+    host: Option<String>,
+    port: Option<u16>,
+    white_token: Option<Vec<String>>,
+    gateway: Option<String>,
+    netmask: Option<String>,
+    finger: Option<bool>,
+    log_path: Option<String>,
+    wg_secret_key: Option<String>,
+    rate_limit: Option<u64>,
+    #[cfg(feature = "web")]
+    web: Option<WebConfig>,
+}
 
 use crate::cipher::RsaCipher;
 
@@ -26,8 +51,6 @@ pub const VNT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GATEWAY: Ipv4Addr = Ipv4Addr::new(10, 26, 0, 1);
 const NETMASK: Ipv4Addr = Ipv4Addr::new(255, 255, 255, 0);
 
-/// vnt服务端,
-/// 默认情况服务日志输出在 './log/'下,可通过编写'./log/log4rs.yaml'文件自定义日志配置
 #[derive(Parser, Debug, Clone)]
 #[command(version)]
 pub struct StartArgs {
@@ -70,6 +93,9 @@ pub struct StartArgs {
     /// Rate limit in bytes per second for IpTurn traffic, 0 or omitted means no limit
     #[arg(long)]
     rate_limit: Option<u64>,
+    /// 配置文件路径，例如 --conf config.toml
+    #[arg(long)]
+    conf: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -132,7 +158,7 @@ fn log_init(root_path: PathBuf, log_path: Option<String>) {
 appenders:
   rolling_file:
     kind: rolling_file
-    path: {}/szvbs.log
+    path: {}/iotnet.log
     append: true
     encoder:
       pattern: \"{{d}} [{{f}}:{{L}}] {{h({{l}})}} {{M}}:{{m}}{{n}}\"
@@ -143,7 +169,7 @@ appenders:
         limit: 10 mb
       roller:
         kind: fixed_window
-        pattern: {}/szvbs.{{}}.log
+        pattern: {}/iotnet.{{}}.log
         base: 1
         count: 5
 
@@ -181,34 +207,74 @@ async fn main() {
     println!("version: {}", VNT_VERSION);
     println!("Serial: {}", generated_serial_number::SERIAL_NUMBER);
     let args = StartArgs::parse();
+
+    // 加载配置文件
+    let config_opt: Option<ConfigFile> = match args.conf.as_ref() {
+        Some(path) => {
+            match std::fs::read_to_string(path) {
+                Ok(content) => match toml::from_str::<ConfigFile>(&content) {
+                    Ok(c) => Some(c),
+                    Err(e) => {
+                        eprintln!("解析TOML配置文件失败: {}，路径: {}", e, path.display());
+                        std::process::exit(1);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("读取配置文件失败: {}，路径: {}", e, path.display());
+                    std::process::exit(1);
+                }
+            }
+        },
+        None => None,
+    };
+
     let root_path = app_root();
-    log_init(root_path.clone(), args.log_path);
-    let port = args.port.unwrap_or(29872);
-    let host = args.host.clone();
+    let effective_log_path = args.log_path.or(config_opt.as_ref().and_then(|c| c.log_path.clone()));
+    log_init(root_path.clone(), effective_log_path);
+    
+    // 有效端口
+    let port = args.port.or(config_opt.as_ref().and_then(|c| c.port)).unwrap_or(29872);
+    let host = args.host.or(config_opt.as_ref().and_then(|c| c.host.clone()));
+    
     #[cfg(feature = "web")]
     let web_port = {
-        let web_port = args.web_port.unwrap_or(29870);
+        let wp = args.web_port
+            .or(config_opt.as_ref().and_then(|c| c.web.as_ref().and_then(|w| w.web_port)))
+            .unwrap_or(29870);
         println!("端口: {}", port);
-        if web_port != 0 {
-            println!("web端口: {}", web_port);
-            if web_port == port {
+        if wp != 0 {
+            println!("web端口: {}", wp);
+            if wp == port {
                 panic!("web-port == port");
             }
         } else {
             println!("不启用web后台")
         }
-        web_port
+        wp
     };
 
-    let white_token = args
-        .white_token
-        .map(|white_token| HashSet::from_iter(white_token.into_iter()));
+    #[cfg(feature = "web")]
+    let username = args.username
+        .or(config_opt.as_ref().and_then(|c| c.web.as_ref().and_then(|w| w.username.clone())))
+        .unwrap_or_else(|| "admin".into());
+
+    #[cfg(feature = "web")]
+    let password = args.password
+        .or(config_opt.as_ref().and_then(|c| c.web.as_ref().and_then(|w| w.password.clone())))
+        .unwrap_or_else(|| "admin".into());
+
+    // 白名单
+    let white_token_opt = args.white_token.or(config_opt.as_ref().and_then(|c| c.white_token.clone()));
+    let white_token = white_token_opt.map(|v| HashSet::from_iter(v.into_iter()));
     println!("token白名单: {:?}", white_token);
-    let gateway = if let Some(gateway) = args.gateway {
-        match gateway.parse::<Ipv4Addr>() {
+
+    // 网关
+    let gateway_str = args.gateway.or(config_opt.as_ref().and_then(|c| c.gateway.clone()));
+    let gateway = if let Some(g_str) = gateway_str {
+        match g_str.parse::<Ipv4Addr>() {
             Ok(ip) => ip,
             Err(e) => {
-                log::error!("网关错误，必须为有效的ipv4地址 gateway={},e={}", gateway, e);
+                log::error!("网关错误，必须为有效的ipv4地址 gateway={},e={}", g_str, e);
                 panic!("网关错误，必须为有效的ipv4地址")
             }
         }
@@ -238,13 +304,16 @@ async fn main() {
         );
         log::warn!("网关错误，不是一个私有地址 gateway={}", gateway);
     }
-    let netmask = if let Some(netmask) = args.netmask {
-        match netmask.parse::<Ipv4Addr>() {
+
+    // 子网掩码
+    let netmask_str = args.netmask.or(config_opt.as_ref().and_then(|c| c.netmask.clone()));
+    let netmask = if let Some(n_str) = netmask_str {
+        match n_str.parse::<Ipv4Addr>() {
             Ok(ip) => ip,
             Err(e) => {
                 log::error!(
                     "子网掩码错误，必须为有效的ipv4地址 netmask={},e={}",
-                    netmask,
+                    n_str,
                     e
                 );
                 panic!("子网掩码错误，必须为有效的ipv4地址")
@@ -265,26 +334,57 @@ async fn main() {
 
     let broadcast = (!u32::from_be_bytes(netmask.octets())) | u32::from_be_bytes(gateway.octets());
     let broadcast = Ipv4Addr::from(broadcast);
-    let check_finger = args.finger;
+
+    // 指纹校验
+    let check_finger = if args.finger {
+        true
+    } else {
+        config_opt.as_ref().map_or(false, |c| c.finger.unwrap_or(false))
+    };
     if check_finger {
         println!("转发校验数据指纹，客户端必须增加--finger参数");
     }
-    let wg_secret_key: [u8; 32] = if let Some(wg_secret_key) = args.wg_secret_key {
-        let wg_secret_key = general_purpose::STANDARD
-            .decode(wg_secret_key)
-            .context("wg私钥错误")
-            .unwrap();
-        wg_secret_key
-            .try_into()
-            .map_err(|_| anyhow!("wg私钥错误"))
-            .unwrap()
+
+    // WG密钥 - 添加fallback逻辑
+    let wg_sk_str = args.wg_secret_key.or(config_opt.as_ref().and_then(|c| c.wg_secret_key.clone()));
+    let wg_secret_key_bytes: [u8; 32] = if let Some(sk_str) = wg_sk_str {
+        match general_purpose::STANDARD.decode(&sk_str.trim()) {  // trim()去除可能的空格
+            Ok(decoded) => {
+                if decoded.len() == 32 {
+                    match decoded.try_into() {
+                        Ok(key) => key,
+                        Err(_) => {
+                            eprintln!("WG私钥长度无效，使用随机生成: {}", sk_str);
+                            let mut key = [0u8; 32];
+                            rand::thread_rng().fill_bytes(&mut key);
+                            key
+                        }
+                    }
+                } else {
+                    eprintln!("WG私钥解码长度不是32字节 (实际: {}), 使用随机生成: {}", decoded.len(), sk_str);
+                    let mut key = [0u8; 32];
+                    rand::thread_rng().fill_bytes(&mut key);
+                    key
+                }
+            }
+            Err(e) => {
+                eprintln!("WG私钥Base64解码失败: {}, 使用随机生成: {}", e, sk_str);
+                let mut key = [0u8; 32];
+                rand::thread_rng().fill_bytes(&mut key);
+                key
+            }
+        }
     } else {
-        let mut wg_secret_key = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut wg_secret_key);
-        wg_secret_key
+        let mut key = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut key);
+        key
     };
-    let wg_secret_key = boringtun::x25519::StaticSecret::from(wg_secret_key);
+    let wg_secret_key = boringtun::x25519::StaticSecret::from(wg_secret_key_bytes);
     let wg_public_key = boringtun::x25519::PublicKey::from(&wg_secret_key);
+
+    // 速率限制
+    let rate_limit = args.rate_limit.or(config_opt.as_ref().and_then(|c| c.rate_limit));
+
     let config = ConfigInfo {
         port,
         white_token,
@@ -293,13 +393,14 @@ async fn main() {
         netmask,
         check_finger,
         #[cfg(feature = "web")]
-        username: args.username.unwrap_or_else(|| "admin".into()),
+        username,
         #[cfg(feature = "web")]
-        password: args.password.unwrap_or_else(|| "admin".into()),
+        password,
         wg_secret_key,
         wg_public_key,
-        rate_limit: args.rate_limit,
+        rate_limit,
     };
+
     let rsa = match RsaCipher::new(root_path) {
         Ok(rsa) => {
             println!("密钥指纹: {}", rsa.finger());

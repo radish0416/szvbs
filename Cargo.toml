@@ -1,5 +1,5 @@
 [package]
-name = "szvbs"
+name = "ioTnet"
 version = "1.2.12"
 edition = "2021"
 
@@ -48,9 +48,10 @@ crossbeam-utils = "0.8"
 futures-util = "0.3"
 uuid = { version = "1.8", features = ["v4"] }
 static-files = "0.2"
+toml = "0.8"
 
 [features]
-default = ["normal"]
+default = ["normal","web"]
 normal = ["aes-gcm"]
 ring-cipher = ["ring"]
 web = ["actix-web", "actix-files", "actix-web-static-files"]

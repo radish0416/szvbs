@@ -14,9 +14,9 @@ pub struct WGData {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WgConfig {
-    pub szvbs_endpoint: String,
-    pub szvbs_public_key: String,
-    pub szvbs_allowed_ips: String,
+    pub iotnet_endpoint: String,
+    pub iotnet_public_key: String,
+    pub iotnet_allowed_ips: String,
 
     pub public_key: String,
     pub private_key: String,
@@ -51,8 +51,8 @@ pub struct ClientInfo {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WireGuardConfigRes {
-    pub szvbs_endpoint: String,
-    pub szvbs_allowed_ips: String,
+    pub iotnet_endpoint: String,
+    pub iotnet_allowed_ips: String,
     pub group_id: String,
     pub device_id: String,
     pub ip: Ipv4Addr,
@@ -64,8 +64,8 @@ pub struct WireGuardConfigRes {
 impl From<WireGuardConfig> for WireGuardConfigRes {
     fn from(value: WireGuardConfig) -> Self {
         Self {
-            szvbs_endpoint: value.vnts_endpoint,
-            szvbs_allowed_ips: value.vnts_allowed_ips,
+            iotnet_endpoint: value.iotnet_endpoint,
+            iotnet_allowed_ips: value.iotnet_allowed_ips,
             group_id: value.group_id,
             device_id: value.device_id,
             ip: value.ip,
@@ -94,8 +94,8 @@ pub struct NetworkInfo {
     pub mask_ip: Ipv4Addr,
     // 网关
     pub gateway_ip: Ipv4Addr,
-    // szvbs的公钥
-    pub szvbs_public_key: String,
+    // iotnet的公钥
+    pub iotnet_public_key: String,
     // 网段下的客户端列表
     pub clients: Vec<ClientInfo>,
 }
@@ -105,13 +105,13 @@ impl NetworkInfo {
         network_ip: Ipv4Addr,
         mask_ip: Ipv4Addr,
         gateway_ip: Ipv4Addr,
-        szvbs_public_key: String,
+        iotnet_public_key: String,
     ) -> Self {
         Self {
             network_ip,
             mask_ip,
             gateway_ip,
-            szvbs_public_key,
+            iotnet_public_key,
             clients: Default::default(),
         }
     }
