@@ -90,7 +90,7 @@ pub struct StartArgs {
     /// wg私钥，使用base64编码
     #[arg(long = "wg")]
     wg_secret_key: Option<String>,
-    /// Rate limit in bytes per second for IpTurn traffic, 0 or omitted means no limit
+    /// 速率限制（字节/秒），0表示全部限制，默认无
     #[arg(long)]
     rate_limit: Option<u64>,
     /// 配置文件路径，例如 --conf config.toml
