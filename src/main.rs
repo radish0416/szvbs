@@ -12,6 +12,8 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use serde::Deserialize;
 use toml;
+use std::fs;  // 添加到顶部use
+
 
 #[cfg(feature = "web")]
 #[derive(Deserialize, Clone, Debug)]
@@ -96,6 +98,9 @@ pub struct StartArgs {
     /// 配置文件路径，例如 --conf config.toml
     #[arg(long)]
     conf: Option<PathBuf>,
+     /// Token白名单文件路径，每行一个token，例如 --token tokens.txt
+     #[arg(long)]
+     token: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -264,9 +269,47 @@ async fn main() {
         .unwrap_or_else(|| "admin".into());
 
     // 白名单
-    let white_token_opt = args.white_token.or(config_opt.as_ref().and_then(|c| c.white_token.clone()));
-    let white_token = white_token_opt.map(|v| HashSet::from_iter(v.into_iter()));
-    println!("token白名单: {:?}", white_token);
+    // let white_token_opt = args.white_token.or(config_opt.as_ref().and_then(|c| c.white_token.clone()));
+    // let white_token = white_token_opt.map(|v| HashSet::from_iter(v.into_iter()));
+    // println!("token白名单: {:?}", white_token);
+
+    // 白名单 - 支持文件读取
+    let mut white_token_set: HashSet<String> = HashSet::new();
+
+    // 1. 命令行 --white-token 优先
+    if let Some(tokens) = &args.white_token {
+       white_token_set.extend(tokens.iter().cloned());
+    }
+    // 2. --token 文件
+    if let Some(path) = &args.token {
+        match fs::read_to_string(path) {
+            Ok(content) => {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                        white_token_set.insert(trimmed.to_string());
+                    }
+                }
+                if !white_token_set.is_empty() {
+                    println!("从文件加载token白名单: {} 个", white_token_set.len());
+                }
+            }
+            Err(e) => {
+                eprintln!("Token文件读取失败: {}，路径: {}，继续使用其他白名单", e, path.display());
+            }
+        }
+    }
+    // 3. config.toml fallback（如果命令行和文件为空）
+       if white_token_set.is_empty() {
+           if let Some(config) = &config_opt {
+               if let Some(tokens) = &config.white_token {
+                   white_token_set.extend(tokens.iter().cloned());
+               }
+           }
+       }
+
+       let white_token = if white_token_set.is_empty() { None } else { Some(white_token_set) };
+       println!("最终token白名单: {:?}", white_token);
 
     // 网关
     let gateway_str = args.gateway.or(config_opt.as_ref().and_then(|c| c.gateway.clone()));
